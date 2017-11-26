@@ -93,6 +93,7 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
             if previous_word:
                 # Check for stopwords
                 if previous_word.lower() in stopwords or word.lower() in stopwords:
+                    previous_word = word
                     continue
                 phrase = phrase_format % (previous_word, word)
                 phrase_freq[phrase] += 1
