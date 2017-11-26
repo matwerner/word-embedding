@@ -24,7 +24,6 @@ import nltk.corpus
 import os.path
 import re
 import string
-import unidecode
 
 VERBOSE_EVERY_PERC = 0.1
 

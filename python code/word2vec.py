@@ -8,8 +8,6 @@ Tutorial: http://mccormickml.com/2016/04/19/word2vec-tutorial-the-skip-gram-mode
     Load Packages
 """
 
-from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
-
 import argparse
 import numpy as np
 import _pickle as cPickle
