@@ -10,7 +10,7 @@ Tutorial: http://mccormickml.com/2016/04/19/word2vec-tutorial-the-skip-gram-mode
 
 import argparse
 import numpy as np
-import _pickle as cPickle
+import pickle
 import random
 import theano
 import theano.tensor as T
@@ -25,7 +25,7 @@ np.random.seed(100)
 
 class Corpus(object):
     
-    def __init__(self, corpus_path, sampling_rate, token_delimiter=' '):
+    def __init__(self, sentences_path, tokens_path, token_freq_path, sampling_rate, token_delimiter=' '):
         # Sentence are store as string not as vectors
         self.__token_delimiter = token_delimiter
         
@@ -33,10 +33,12 @@ class Corpus(object):
         self.sampling_rate = sampling_rate
         
         # Load Corpus
-        with open(corpus_path, 'rb') as fp:
-            self.__tokens = cPickle.load(fp) 
-            self.__token_freq = cPickle.load(fp)
-            self.__sentences = cPickle.load(fp)
+        with open(tokens_path, 'rb') as fp:
+            self.__tokens = pickle.load(fp)
+        with open(token_freq_path, 'rb') as fp:
+            self.__token_freq = pickle.load(fp)
+        with open(sentences_path, 'rb') as fp:
+            self.__sentences = pickle.load(fp)
     
     def sentences_size(self):
         if hasattr(self, "__sentences_size") and self.__sentences_size:
@@ -334,11 +336,11 @@ class Word2Vec(object):
         self.train_model.profile.summary()
         return batch_cost
     
-    def save(self, output_path):
-        with open(output_path, 'wb') as fp:
-            cPickle.dump(self.W_in_values.shape, fp)
-            cPickle.dump(self.W_in_values, fp)
-            cPickle.dump(self.W_out_values, fp)
+    def save(self, W_in_path, W_out_path):
+        with open(W_in_path, 'wb') as fp:
+            pickle.dump(self.W_in_values, fp, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(W_out_path, 'wb') as fp:
+            pickle.dump(self.W_out_values, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
 """
     Experiments
@@ -374,10 +376,16 @@ if __name__ == '__main__':
     parser.add_argument('--print', dest='print_every', metavar='N',
                         type=int, default=5000,
                         help='Frequency of print temporary results')
-    parser.add_argument('--corpus_path', dest='corpus_path', metavar='N', type=str,
-                        help='Corpus dataset path')
-    parser.add_argument('--embedding_path', dest='word_embedding_path', metavar='N', type=str,
-                        help='Word Embeddings path')
+    parser.add_argument('--sentences_path', dest='sentences_path', metavar='N', type=str,
+                        help='Sentences dataset path')
+    parser.add_argument('--tokens_path', dest='tokens_path', metavar='N', type=str,
+                        help='Tokens dataset path')
+    parser.add_argument('--frequencies_path', dest='frequencies_path', metavar='N', type=str,
+                        help='Token frequencies dataset path')                                                
+    parser.add_argument('--w_in_path', dest='w_in_path', metavar='N', type=str,
+                        help='Word Embeddings IN path')
+    parser.add_argument('--w_out_path', dest='w_out_path', metavar='N', type=str,
+                        help='Word Embeddings OUT path')
     
     args = parser.parse_args()
 
@@ -385,7 +393,7 @@ if __name__ == '__main__':
         Load corpus
     """
 
-    corpus = Corpus(args.corpus_path, args.sampling_rate)
+    corpus = Corpus(args.sentences_path, args.tokens_path, args.frequencies_path, args.sampling_rate)
 
     """
         Process unigram table
@@ -406,4 +414,4 @@ if __name__ == '__main__':
                    anneal_every=args.anneal_every * args.batch_size,
                    print_every=args.print_every * args.batch_size)
 
-    word2vec.save(args.word_embedding_path)
+    word2vec.save(args.w_in_path, args.w_out_path)

@@ -15,13 +15,12 @@ Source: https://www.mediawiki.org/wiki/Alternative_parsers
 """
 from collections import Counter
 
-import _pickle as cPickle
 import argparse
 import io
 import json
 import math
-import nltk.corpus
 import os.path
+import pickle
 import re
 import string
 
@@ -271,14 +270,22 @@ if __name__ == '__main__':
                         help='number maximum of tokens to be used')    
     parser.add_argument('--wiki_dump', dest='dump_path', metavar='N', type=str,
                         help='path to wikipedia dump articles')
-    parser.add_argument('--full_vocab', dest='full_vocab_path', metavar='N', type=str,
-                        help='path to store all processed articles')
-    parser.add_argument('--verbose', dest='verbose', metavar='N', type=bool,
-                        help='Print Progress')
-    parser.add_argument('--limited_vocab', dest='limited_vocab_path', metavar='N', type=str,
-                        help='path to store all processed articles with limited tokens')
+    parser.add_argument('--full_sentences', dest='full_sentences_path', metavar='N', type=str,
+                        help='path to store all sentences of processed articles')
+    parser.add_argument('--full_tokens', dest='full_tokens_path', metavar='N', type=str,
+                        help='path to store all tokens of processed articles')
+    parser.add_argument('--full_frequencies', dest='full_frequencies_path', metavar='N', type=str,
+                        help='path to store all frequencies of processed articles')
+    parser.add_argument('--filtered_sentences', dest='filtered_sentences_path', metavar='N', type=str,
+                        help='path to store all sentences of processed and filtered articles')
+    parser.add_argument('--filtered_tokens', dest='filtered_tokens_path', metavar='N', type=str,
+                        help='path to store all tokens of processed and filtered articles')
+    parser.add_argument('--filtered_frequencies', dest='filtered_frequencies_path', metavar='N', type=str,
+                        help='path to store all frequencies of processed and filtered articles')
     parser.add_argument('--stopwords', dest='stopwords_path', metavar='N', type=str,
                         help='path stopwords to be ignored while learning phrases')
+    parser.add_argument('--verbose', dest='verbose', metavar='N', type=bool,
+                        help='Print Progress')                        
     
     args = parser.parse_args()
 
@@ -297,20 +304,22 @@ if __name__ == '__main__':
     """
 
     # Check if already converted
-    if os.path.isfile(args.full_vocab_path) and not os.path.isfile(args.limited_vocab_path):
+    if os.path.isfile(args.full_sentences_path) and not os.path.isfile(args.filtered_sentences_path):
         if args.verbose:
             print('Loading full vocabulary sentences')
 
-        with open(args.full_vocab_path, 'rb') as fp:
-            tokens = cPickle.load(fp) 
-            token_freq = cPickle.load(fp)
-            sentences = cPickle.load(fp)
-            word_count = sum(token_freq.values())
+        with open(args.full_sentences_path, 'rb') as fp:
+            sentences = pickle.load(fp)
+        with open(args.full_tokens_path, 'rb') as fp:
+            tokens = pickle.load(fp) 
+        with open(args.full_frequencies_path, 'rb') as fp:
+            token_freq = pickle.load(fp) 
+        word_count = sum(token_freq.values())
 
         if args.verbose:
             print('Loading completed!\n')
 
-    elif not os.path.isfile(args.full_vocab_path):
+    elif not os.path.isfile(args.full_sentences_path):
         if args.verbose:
             print('Start processing articles')
 
@@ -337,10 +346,12 @@ if __name__ == '__main__':
         del articles
 
         # Save indexes
-        with open(args.full_vocab_path, 'wb') as fp:
-            cPickle.dump(tokens, fp) 
-            cPickle.dump(token_freq, fp)
-            cPickle.dump(sentences, fp) 
+        with open(args.full_sentences_path, 'wb') as fp:
+            pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL) 
+        with open(args.full_tokens_path, 'wb') as fp:
+            pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL) 
+        with open(args.full_frequencies_path, 'wb') as fp:
+            pickle.dump(token_freq, fp, protocol=pickle.HIGHEST_PROTOCOL)
         
         if args.verbose:
             print('Processing completed\n')
@@ -350,7 +361,7 @@ if __name__ == '__main__':
         Limit Tokens to be used
     """
 
-    if not os.path.isfile(args.limited_vocab_path):
+    if not os.path.isfile(args.filtered_sentences_path):
         if args.verbose:
             print('Filtering vocabulary from sentences')
 
@@ -361,10 +372,12 @@ if __name__ == '__main__':
                                                                       args.max_tokens)
         
         # Save indexes
-        with open(args.limited_vocab_path, 'wb') as fp:
-            cPickle.dump(tokens, fp) 
-            cPickle.dump(token_freq, fp)
-            cPickle.dump(sentences, fp)
+        with open(args.filtered_sentences_path, 'wb') as fp:
+            pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL) 
+        with open(args.filtered_tokens_path, 'wb') as fp:
+            pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL) 
+        with open(args.filtered_frequencies_path, 'wb') as fp:
+            pickle.dump(token_freq, fp, protocol=pickle.HIGHEST_PROTOCOL)
             
         if args.verbose:
             print('Filtering completed\n')
