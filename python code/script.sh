@@ -20,9 +20,10 @@ python3 preprocessing.py --n_articles $ARTICLES --n_tokens $TOKENS --wiki_dump $
 
 # Word2Vec training
 
-EMBEDDING_SIZE="embedding100"
+EMBEDDING_SIZE="embedding300"
 
-EMBEDDING=100
+RANDOM_SIZE=100000000
+EMBEDDING=300
 ANNEAL_RATE=0.9
 ANNEAL_EVERY=100000
 PRINT_EVERY=10000
@@ -32,6 +33,6 @@ FREQUENCIES_PATH="$BASE_PATH-frequencies-$DOC_FORMAT-$VOCAB_FORMAT.pickle"
 W_IN_PATH="$BASE_PATH-win-$DOC_FORMAT-$VOCAB_FORMAT-$EMBEDDING_SIZE.pickle"
 W_OUT_PATH="$BASE_PATH-wout-$DOC_FORMAT-$VOCAB_FORMAT-$EMBEDDING_SIZE.pickle"
 
-python3 word2vec.py --embedding $EMBEDDING --anneal_rate $ANNEAL_RATE --anneal $ANNEAL_EVERY --print $PRINT_EVERY --sentences_path $SENTENCES_PATH  --tokens_path $TOKENS_PATH  --frequencies_path $FREQUENCIES_PATH --w_in_path $W_IN_PATH --w_out_path $W_OUT_PATH
+python3 word2vec.py --random $RANDOM_SIZE --embedding $EMBEDDING --anneal_rate $ANNEAL_RATE --anneal $ANNEAL_EVERY --print $PRINT_EVERY --sentences_path $SENTENCES_PATH  --tokens_path $TOKENS_PATH  --frequencies_path $FREQUENCIES_PATH --w_in_path $W_IN_PATH --w_out_path $W_OUT_PATH
 
 

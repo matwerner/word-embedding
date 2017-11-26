@@ -130,7 +130,7 @@ class Corpus(object):
             # Get random sentence
             sentence_idx = random.randint(0, len(sentences) - 1)
             sentence = sentences[sentence_idx]
-            indexes = self.__get_sentence_indexes(raw_sentence)
+            indexes = self.__get_sentence_indexes(sentence)
 
             # Get random center word
             center_idx = random.randint(0, len(indexes) - 1)
@@ -280,6 +280,7 @@ class Word2Vec(object):
         return train_model
 
     def train(self,
+              random_size=10**8,
               window_size=5,
               negative_sample_size=5,
               learning_rate=0.3,              
@@ -296,7 +297,7 @@ class Word2Vec(object):
         in_corpus = []
         
         batch_cost = 0
-        for it, (center_word, context) in enumerate(self.corpus.contexts(window_size)):
+        for it, (center_word, context) in enumerate(self.corpus.random_contexts(random_size, window_size)):
             # Define constants
             context_size = len(context)
             total_negative_sample_size = context_size * negative_sample_size
@@ -358,6 +359,9 @@ if __name__ == '__main__':
     parser.add_argument('--embedding', dest='embedding_size', metavar='N',
                         type=int, default=300,
                         help='Embedding dimensionality')
+    parser.add_argument('--random', dest='random_size', metavar='N',
+                        type=int, default=10**8,
+                        help='Number of random contexts to train the word embedding')
     parser.add_argument('--context', dest='context_size', metavar='N',
                         type=int, default=5,
                         help='Window size')
@@ -406,7 +410,8 @@ if __name__ == '__main__':
     """
 
     word2vec = Word2Vec(corpus, args.embedding_size, unigram_table)
-    word2vec.train(window_size=args.context_size,
+    word2vec.train(random_size=args.random_size,
+                   window_size=args.context_size,
                    negative_sample_size=args.negative_sample_size,
                    batch_size=args.batch_size,
                    learning_rate=args.learning_rate,
