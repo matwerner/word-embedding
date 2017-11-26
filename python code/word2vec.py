@@ -279,6 +279,7 @@ class Word2Vec(object):
               negative_sample_size=5,
               learning_rate=0.3,              
               batch_size=100,
+              anneal_rate=0.9,
               anneal_every=100000,
               print_every=5000):
         
@@ -316,7 +317,7 @@ class Word2Vec(object):
 
             # Update learning rate
             if (it + 1) % anneal_every == 0:
-                learning_rate *= 0.5
+                learning_rate *= anneal_rate
 
             # Print temp results
             if (it + 1) % print_every == 0:
@@ -361,9 +362,12 @@ if __name__ == '__main__':
     parser.add_argument('--batch', dest='batch_size', metavar='N',
                         type=int, default=100,
                         help='Number of training samples before update weights')
-    parser.add_argument('--annel', dest='anneal_every', metavar='N',
+    parser.add_argument('--anneal_rate', dest='anneal_rate', metavar='N',
+                        type=float, default=0.9,
+                        help='Rate for update Learning Rate')
+    parser.add_argument('--anneal', dest='anneal_every', metavar='N',
                         type=int, default=100000,
-                        help='Update Learning Rate')
+                        help='Frequency of update Learning Rate')
     parser.add_argument('--print', dest='print_every', metavar='N',
                         type=int, default=5000,
                         help='Frequency of print temporary results')
@@ -395,6 +399,7 @@ if __name__ == '__main__':
                    negative_sample_size=args.negative_sample_size,
                    batch_size=args.batch_size,
                    learning_rate=args.learning_rate,
+                   anneal_rate=args.anneal_rate,
                    anneal_every=args.anneal_every * args.batch_size,
                    print_every=args.print_every * args.batch_size)
 
