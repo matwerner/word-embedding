@@ -15,6 +15,9 @@ import random
 import theano
 import theano.tensor as T
 
+# Fix seed
+np.random.seed(100)
+
 """
     Corpus Class
     Corpus dataset must be preprocessed by preprocessing.ipynb before being load
