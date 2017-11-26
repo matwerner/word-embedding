@@ -577,6 +577,7 @@ serviu
 marcou
 devido
 possui
+ficou
 ocupou
 atualmente
 localizada

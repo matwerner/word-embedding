@@ -19,11 +19,14 @@ import _pickle as cPickle
 import argparse
 import io
 import json
+import math
 import nltk.corpus
 import os.path
 import re
 import string
 import unidecode
+
+VERBOSE_EVERY_PERC = 0.1
 
 """
     Convert Corpus to sentences
@@ -62,7 +65,11 @@ def get_sentences(corpus):
 """
 
 def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
-                  delimiter='_', token_delimiter=' ', stopwords=frozenset()):                  
+                  delimiter='_', token_delimiter=' ', stopwords=frozenset(),
+                  verbose=False):
+    if verbose:
+        print("Starting Learning Phrases")
+
     # All variables
     idx = 0
     tokens = {}
@@ -70,11 +77,16 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
     phrase_freq = Counter()
     word_count = 0
     unique_count = 0
-    
+    print_every = int(VERBOSE_EVERY_PERC * (len(sentences)-1))
+
     phrase_format = '%s' + delimiter + '%s'
     
     # Get counts
-    for sentence in sentences:
+    for i, sentence in enumerate(sentences):
+        if verbose and i % print_every == 0:
+            perc = math.ceil(100 * i/len(sentences))
+            print("Learned possible phrases from %f%% of the sentences" % (perc,))
+
         previous_word = None
         for word in sentence.split(token_delimiter):
             if unique_count > token_limit:
@@ -103,12 +115,18 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
             previous_word = word
             word_count += 1
         if unique_count > token_limit:
-            print('Limit reached')
+            if verbose:
+                print('Limit reached')
             break
                 
     # Find valid phrases
+    print_every = int(VERBOSE_EVERY_PERC * (len(phrase_freq)-1))
     valid_phrases = Counter()
-    for phrase, count in phrase_freq.items():        
+    for phrase, count in phrase_freq.items():
+        if verbose and i % print_every == 0:
+            perc = math.ceil(100 * i/len(phrase_freq))
+            print("Checked valid phrases from %f%% of the possible phrases" % (perc,))
+
         word_a, word_b = phrase.split(delimiter)
         
         # Get counts
@@ -120,6 +138,11 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
         # Append if valid
         if score > threshold:
             valid_phrases[phrase] = count
+
+    if verbose:
+        print("Total phrases:\t%d" % (len(phrase_freq),))
+        print("Valid phrases:\t%d" % (len(valid_phrases),))
+        print("Learning Phrases completed\n")
             
     return valid_phrases
 
@@ -127,11 +150,19 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
     Replace all tokens pairs by their respectives phrases
 """
 
-def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter=' '):
+def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter=' ', verbose=False):
+    if verbose:
+        print("Starting Replace tokens to Phrases")
+
     phrase_format = '%s' + delimiter + '%s'
+    print_every = int(VERBOSE_EVERY_PERC * (len(sentences)-1))
     
     # Update sentences
     for i in range(len(sentences)):
+        if verbose and i % print_every == 0:
+            perc = math.ceil(100 * i/len(sentences))
+            print("Replaced tokens from %f%% of the sentences" % (perc,))
+
         # Get sentence
         sentence = sentences[i].split(token_delimiter)
         
@@ -148,22 +179,33 @@ def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter
             previous_word = word
         new_sentence += (concat_phrase if concat_phrase else previous_word)
         sentences[i] = new_sentence
+
+    if verbose:
+        print("Replace tokens to Phrases completed")
+
     return sentences
 
 """
     Convert Corpora to Sentences
 """
 
-def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' '):
+def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' ', verbose=False):
+    if verbose:
+        print("Starting Corpora to Sentences")
+
     # All variables
     sentences = []
     idx = 0
     tokens = {}
     token_freq = Counter()
     word_count = 0
-    
+    print_every = int(VERBOSE_EVERY_PERC * (len(corpora)-1))    
+
     # Preprocess all corpora
-    for corpus in corpora:
+    for i, corpus in enumerate(corpora):
+        if verbose and i % print_every == 0:
+            perc = math.ceil(100 * i/len(corpora))
+            print("Preprocessed %f%% of the corpora" % (perc,))
         sentences += get_sentences(corpus)
     
     # Load stopwords
@@ -172,10 +214,10 @@ def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' '):
     stopwords = frozenset(stopwords)
     
     # Get phrases
-    phrases_freq = learn_phrases(sentences, stopwords=stopwords)
+    phrases_freq = learn_phrases(sentences, stopwords=stopwords, verbose=verbose)
     
     # Update sentences with new phrases
-    sentences = replace_tokens_to_phrases(sentences, phrases_freq)
+    sentences = replace_tokens_to_phrases(sentences, phrases_freq, verbose=verbose)
     
     # Get counters
     for sentence in sentences:
@@ -187,14 +229,20 @@ def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' '):
             else:
                 token_freq[word] += 1
             word_count += 1
-    
+
+    if verbose:
+        print("Sentences:\t%d" % (len(sentences),))
+        print("Tokens:\t\t%d" % (len(token_freq),))
+        print("Word Count:\t%d" % (word_count,))
+        print("Corpora to Sentences completed")
+ 
     return sentences, tokens, token_freq, phrases_freq, word_count
 
 """
     Filter vocabulary by most common words
 """
 
-def filter_vocabulary(sentences, tokens, token_freq, max_tokens, token_delimiter=' '):    
+def filter_vocabulary(sentences, tokens, token_freq, max_tokens, token_delimiter=' '):
     # Get most frequent words
     token_freq = Counter(dict(token_freq.most_common(max_tokens)))
     
@@ -226,6 +274,8 @@ if __name__ == '__main__':
                         help='path to wikipedia dump articles')
     parser.add_argument('--full_vocab', dest='full_vocab_path', metavar='N', type=str,
                         help='path to store all processed articles')
+    parser.add_argument('--verbose', dest='verbose', metavar='N', type=bool,
+                        help='Print Progress')
     parser.add_argument('--limited_vocab', dest='limited_vocab_path', metavar='N', type=str,
                         help='path to store all processed articles with limited tokens')
     parser.add_argument('--stopwords', dest='stopwords_path', metavar='N', type=str,
@@ -249,7 +299,8 @@ if __name__ == '__main__':
 
     # Check if already converted
     if os.path.isfile(args.full_vocab_path) and not os.path.isfile(args.limited_vocab_path):
-        print('Loading full vocabulary sentences...')
+        if args.verbose:
+            print('Loading full vocabulary sentences')
 
         with open(args.full_vocab_path, 'rb') as fp:
             tokens = cPickle.load(fp) 
@@ -257,10 +308,12 @@ if __name__ == '__main__':
             sentences = cPickle.load(fp)
             word_count = sum(token_freq.values())
 
-        print('Loading completed!')
+        if args.verbose:
+            print('Loading completed!\n')
 
     elif not os.path.isfile(args.full_vocab_path):
-        print('Start processing articles...')
+        if args.verbose:
+            print('Start processing articles')
 
         # Load data
         data_reader = io.open(args.dump_path, mode="r", encoding="utf-8")
@@ -279,7 +332,7 @@ if __name__ == '__main__':
 
         # Run
         stopwords = [] if not args.stopwords_path else [line.strip() for line in open(args.stopwords_path)]
-        sentences, tokens, token_freq, phrases_freq, word_count = corpora_to_sentences(articles, stopwords)
+        sentences, tokens, token_freq, phrases_freq, word_count = corpora_to_sentences(articles, stopwords, verbose=args.verbose)
         
         # Delete articles - memory restraint
         del articles
@@ -290,16 +343,17 @@ if __name__ == '__main__':
             cPickle.dump(token_freq, fp)
             cPickle.dump(sentences, fp) 
         
-        print('Processing completed')
-
-        print(phrases_freq.most_common(1000))
+        if args.verbose:
+            print('Processing completed\n')
+            print(phrases_freq.most_common(100))
 
     """
         Limit Tokens to be used
     """
 
     if not os.path.isfile(args.limited_vocab_path):
-        print('Filtering vocabulary from sentences...')
+        if args.verbose:
+            print('Filtering vocabulary from sentences')
 
         # Run
         sentences, tokens, token_freq, word_count = filter_vocabulary(sentences,
@@ -313,4 +367,5 @@ if __name__ == '__main__':
             cPickle.dump(token_freq, fp)
             cPickle.dump(sentences, fp)
             
-        print('Filtering completed')
+        if args.verbose:
+            print('Filtering completed\n')
