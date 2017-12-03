@@ -314,10 +314,10 @@ def preprocess_command(verbose):
     with open(args.corpora_path, mode="r", encoding="utf-8") as fp:
         for _ in range(args.limit):
             # Get line
-            line = next(fp)
-
+            try:
+                line = next(fp)
             # EOF
-            if not line:
+            except StopIteration:
                 break
 
             # Parse json and append
