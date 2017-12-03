@@ -16,7 +16,6 @@ Source: https://www.mediawiki.org/wiki/Alternative_parsers
 from collections import Counter
 
 import argparse
-import io
 import json
 import math
 import os.path
@@ -63,7 +62,7 @@ def get_sentences(corpus):
 """
 
 def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
-                  delimiter='_', token_delimiter=' ', stopwords=frozenset(),
+                  delimiter=' ', phrase_delimiter='_', stopwords=frozenset(),
                   verbose=False):
     if verbose:
         print("Starting Learning Phrases")
@@ -77,7 +76,7 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
     unique_count = 0
     print_every = int(VERBOSE_EVERY_PERC * (len(sentences)-1))
 
-    phrase_format = '%s' + delimiter + '%s'
+    phrase_format = '%s' + phrase_delimiter + '%s'
     
     # Get counts
     for i, sentence in enumerate(sentences):
@@ -86,7 +85,7 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
             print("Learned possible phrases from %f%% of the sentences" % (perc,))
 
         previous_word = None
-        for word in sentence.split(token_delimiter):
+        for word in sentence.split(delimiter):
             if unique_count > token_limit:
                 break
                 
@@ -125,7 +124,7 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
             perc = math.ceil(100 * i/len(phrase_freq))
             print("Checked valid phrases from %f%% of the possible phrases" % (perc,))
 
-        word_a, word_b = phrase.split(delimiter)
+        word_a, word_b = phrase.split(phrase_delimiter)
         
         # Get counts
         count_a, count_b = token_freq[word_a], token_freq[word_b]
@@ -148,11 +147,11 @@ def learn_phrases(sentences, min_count=5, threshold=10, token_limit=10e7,
     Replace all tokens pairs by their respectives phrases
 """
 
-def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter=' ', verbose=False):
+def replace_tokens_to_phrases(sentences, phrases, delimiter=' ', phrase_delimiter='_', verbose=False):
     if verbose:
         print("Starting Replace tokens to Phrases")
 
-    phrase_format = '%s' + delimiter + '%s'
+    phrase_format = '%s' + phrase_delimiter + '%s'
     print_every = int(VERBOSE_EVERY_PERC * (len(sentences)-1))
     
     # Update sentences
@@ -162,7 +161,7 @@ def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter
             print("Replaced tokens from %f%% of the sentences" % (perc,))
 
         # Get sentence
-        sentence = sentences[i].split(token_delimiter)
+        sentence = sentences[i].split(delimiter)
         
         new_sentence = ''
         concat_phrase = None
@@ -172,7 +171,7 @@ def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter
             if phrase in phrases:
                 concat_phrase = phrase if not concat_phrase else phrase_format % (concat_phrase, word)
             else:
-                new_sentence += ((concat_phrase if concat_phrase else previous_word) + token_delimiter)
+                new_sentence += ((concat_phrase if concat_phrase else previous_word) + delimiter)
                 concat_phrase = None
             previous_word = word
         new_sentence += (concat_phrase if concat_phrase else previous_word)
@@ -187,7 +186,7 @@ def replace_tokens_to_phrases(sentences, phrases, delimiter='_', token_delimiter
     Convert Corpora to Sentences
 """
 
-def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' ', verbose=False):
+def corpora_to_sentences(corpora, stopwords=[], delimiter=' ', verbose=False):
     if verbose:
         print("Starting Corpora to Sentences")
 
@@ -195,7 +194,6 @@ def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' ', verbose=Fal
     sentences = []
     idx = 0
     tokens = {}
-    token_freq = Counter()
     word_count = 0
     print_every = int(VERBOSE_EVERY_PERC * (len(corpora)-1))    
 
@@ -210,51 +208,150 @@ def corpora_to_sentences(corpora, stopwords=[], token_delimiter=' ', verbose=Fal
     exception = set(['de', 'do', 'dos', 'da', 'das', 'ser'])
     stopwords = set(stopwords) - exception
     stopwords = frozenset(stopwords)
-    
+
     # Get phrases
-    phrases_freq = learn_phrases(sentences, stopwords=stopwords, verbose=verbose)
+    phrases = learn_phrases(sentences, stopwords=stopwords, verbose=verbose)
     
     # Update sentences with new phrases
-    sentences = replace_tokens_to_phrases(sentences, phrases_freq, verbose=verbose)
+    sentences = replace_tokens_to_phrases(sentences, phrases, verbose=verbose)
     
-    # Get counters
+    # Get tokens
     for sentence in sentences:
-        for word in sentence.split(token_delimiter):                
+        for word in sentence.split(delimiter):                
             if word not in tokens:
                 tokens[word] = idx
-                token_freq[word] = 1
                 idx += 1
-            else:
-                token_freq[word] += 1
             word_count += 1
 
     if verbose:
         print("Sentences:\t%d" % (len(sentences),))
-        print("Tokens:\t\t%d" % (len(token_freq),))
+        print("Tokens:\t\t%d" % (len(tokens),))
         print("Word Count:\t%d" % (word_count,))
         print("Corpora to Sentences completed")
  
-    return sentences, tokens, token_freq, phrases_freq, word_count
+    return sentences, tokens
 
 """
     Filter vocabulary by most common words
 """
 
-def filter_vocabulary(sentences, tokens, token_freq, max_tokens, token_delimiter=' '):
+def filter_vocabulary(sentences, limit, delimiter=' ', verbose=False):
+    if verbose:
+        print("Starting filter vocabulary")
+        
+    # Get counters
+    frequencies = Counter()
+    for sentence in sentences:
+        for word in sentence.split(delimiter):
+            frequencies[word] += 1
+    
     # Get most frequent words
-    token_freq = Counter(dict(token_freq.most_common(max_tokens)))
+    frequencies = Counter(dict(frequencies.most_common(limit)))
     
     # Remove all other words from indices
-    tokens = {key:i for i, key in enumerate(token_freq.keys())}
+    tokens = {key:i for i, key in enumerate(frequencies.keys())}
     
     # Apply remmap in all data structures
-    sentences = [token_delimiter.join([token
-                                       for token in sentence.split(token_delimiter)
-                                       if token in tokens])
+    sentences = [delimiter.join([token
+                                 for token in sentence.split(delimiter)
+                                 if token in tokens])
                  for sentence in sentences]
-    word_count = sum(token_freq.values())
+    word_count = sum(frequencies.values())
+
+    if verbose:
+        print("Sentences:\t%d" % (len(sentences),))
+        print("Tokens:\t\t%d" % (len(tokens),))
+        print("Word Count:\t%d" % (word_count,))
+        print("Corpora to Sentences completed")
+        
+    return sentences, tokens
+
+"""
+    Convert all articles to sentences
+"""
     
-    return sentences, tokens, token_freq, word_count
+def preprocess_command(verbose):
+    parser = argparse.ArgumentParser(description='Process corpora')
+    parser.add_argument('--corpora', dest='corpora_path', type=str,
+                        help='path to corpora')
+    parser.add_argument('--limit', dest='limit', type=int,
+                        help='limit number of corpus')
+    parser.add_argument('--stopwords', dest='stopwords_path', type=str,
+                        help='path stopwords to be ignored while learning phrases')
+    parser.add_argument('--sentences', dest='sentences_path', type=str,
+                        help='path to store all sentences of processed articles')
+    parser.add_argument('--tokens', dest='tokens_path', type=str,
+                        help='path to store all tokens of processed articles')
+    args, unknown = parser.parse_known_args()
+    
+    if verbose:
+        print('Start processing corpora')
+
+    # Load data
+    corpora = []
+    with open(args.corpora_path, mode="r", encoding="utf-8") as fp:
+        for _ in range(args.limit):
+            # Get line
+            line = next(fp)
+
+            # EOF
+            if not line:
+                break
+
+            # Parse json and append
+            corpus = json.loads(line)['text']
+            corpora.append(corpus)
+
+    # Run
+    stopwords = [] if not args.stopwords_path else [line.strip() for line in open(args.stopwords_path)]
+    sentences, tokens = corpora_to_sentences(corpora, stopwords, verbose=verbose)
+
+    # Delete articles - memory restraint
+    del corpora
+
+    # Save
+    with open(args.sentences_path, 'wb') as fp:
+        pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL) 
+    with open(args.tokens_path, 'wb') as fp:
+        pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+    if verbose:
+        print('Processing completed\n')
+
+"""
+    Filter Tokens
+"""
+
+def filter_command(verbose):
+    parser = argparse.ArgumentParser(description='Filter sentences by frequency')
+    parser.add_argument('--raw_sentences', dest='raw_sentences_path', type=str,
+                        help='path to store all sentences of processed articles')
+    parser.add_argument('--limit', dest='limit', type=int,
+                        help='limit number of tokens')
+    parser.add_argument('--sentences', dest='sentences_path', type=str,
+                        help='path to store all sentences of processed articles')
+    parser.add_argument('--tokens', dest='tokens_path', type=str,
+                        help='path to store all tokens of processed articles')
+    args, unknown = parser.parse_known_args()
+    
+    if verbose:
+        print('Filtering vocabulary from sentences')
+    
+    # Load
+    with open(args.raw_sentences_path, 'rb') as fp:
+        raw_sentences = pickle.load(fp)
+
+    # Run
+    sentences, tokens = filter_vocabulary(raw_sentences, args.limit, verbose=verbose)
+
+    # Save
+    with open(args.sentences_path, 'wb') as fp:
+        pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(args.tokens_path, 'wb') as fp:
+        pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+    if verbose:
+        print('Filtering completed\n')
 
 
 """
@@ -263,121 +360,17 @@ def filter_vocabulary(sentences, tokens, token_freq, max_tokens, token_delimiter
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Process wikipedia dump articles')
-    parser.add_argument('--n_articles', dest='max_articles', metavar='N', type=int,
-                        help='number maximum of articles to be processed')
-    parser.add_argument('--n_tokens', dest='max_tokens', metavar='N', type=int,
-                        help='number maximum of tokens to be used')    
-    parser.add_argument('--wiki_dump', dest='dump_path', metavar='N', type=str,
-                        help='path to wikipedia dump articles')
-    parser.add_argument('--full_sentences', dest='full_sentences_path', metavar='N', type=str,
-                        help='path to store all sentences of processed articles')
-    parser.add_argument('--full_tokens', dest='full_tokens_path', metavar='N', type=str,
-                        help='path to store all tokens of processed articles')
-    parser.add_argument('--full_frequencies', dest='full_frequencies_path', metavar='N', type=str,
-                        help='path to store all frequencies of processed articles')
-    parser.add_argument('--filtered_sentences', dest='filtered_sentences_path', metavar='N', type=str,
-                        help='path to store all sentences of processed and filtered articles')
-    parser.add_argument('--filtered_tokens', dest='filtered_tokens_path', metavar='N', type=str,
-                        help='path to store all tokens of processed and filtered articles')
-    parser.add_argument('--filtered_frequencies', dest='filtered_frequencies_path', metavar='N', type=str,
-                        help='path to store all frequencies of processed and filtered articles')
-    parser.add_argument('--stopwords', dest='stopwords_path', metavar='N', type=str,
-                        help='path stopwords to be ignored while learning phrases')
-    parser.add_argument('--verbose', dest='verbose', metavar='N', type=bool,
-                        help='Print Progress')                        
+    parser = argparse.ArgumentParser(description='Command selector')    
+    parser.add_argument(dest='command', type=str,
+                        help='Command to be used: preprocess; filter; split')    
+    parser.add_argument('--verbose', dest='verbose', type=bool,
+                        help='Print Progress')    
+    args, unknown = parser.parse_known_args()
     
-    args = parser.parse_args()
+    if args.command == "preprocess":
+        preprocess_command(args.verbose)
+    elif args.command == "filter":
+        filter_command(args.verbose)
+    else:
+        raise ValueError("Command %s unknown" % args.command)
 
-    """
-        Data structures to be used
-    """
-
-    sentences = []
-    tokens = {}
-    token_freq = Counter()
-    phrase_freq = Counter()
-    word_count = 0
-
-    """
-        Convert all articles to sentences
-    """
-
-    # Check if already converted
-    if os.path.isfile(args.full_sentences_path) and not os.path.isfile(args.filtered_sentences_path):
-        if args.verbose:
-            print('Loading full vocabulary sentences')
-
-        with open(args.full_sentences_path, 'rb') as fp:
-            sentences = pickle.load(fp)
-        with open(args.full_tokens_path, 'rb') as fp:
-            tokens = pickle.load(fp) 
-        with open(args.full_frequencies_path, 'rb') as fp:
-            token_freq = pickle.load(fp) 
-        word_count = sum(token_freq.values())
-
-        if args.verbose:
-            print('Loading completed!\n')
-
-    elif not os.path.isfile(args.full_sentences_path):
-        if args.verbose:
-            print('Start processing articles')
-
-        # Load data
-        data_reader = io.open(args.dump_path, mode="r", encoding="utf-8")
-
-        # Go to beginning
-        data_reader.seek(0)
-
-        # Parse all text from json
-        articles = [json.loads(line)['text']
-                    for line in data_reader]
-
-        data_reader.close()
-
-        # Temporary - Remove once word embedding algorithms are ready
-        articles = articles[:args.max_articles]
-
-        # Run
-        stopwords = [] if not args.stopwords_path else [line.strip() for line in open(args.stopwords_path)]
-        sentences, tokens, token_freq, phrases_freq, word_count = corpora_to_sentences(articles, stopwords, verbose=args.verbose)
-        
-        # Delete articles - memory restraint
-        del articles
-
-        # Save indexes
-        with open(args.full_sentences_path, 'wb') as fp:
-            pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL) 
-        with open(args.full_tokens_path, 'wb') as fp:
-            pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL) 
-        with open(args.full_frequencies_path, 'wb') as fp:
-            pickle.dump(token_freq, fp, protocol=pickle.HIGHEST_PROTOCOL)
-        
-        if args.verbose:
-            print('Processing completed\n')
-            print(phrases_freq.most_common(100))
-
-    """
-        Limit Tokens to be used
-    """
-
-    if not os.path.isfile(args.filtered_sentences_path):
-        if args.verbose:
-            print('Filtering vocabulary from sentences')
-
-        # Run
-        sentences, tokens, token_freq, word_count = filter_vocabulary(sentences,
-                                                                      tokens,
-                                                                      token_freq,
-                                                                      args.max_tokens)
-        
-        # Save indexes
-        with open(args.filtered_sentences_path, 'wb') as fp:
-            pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL) 
-        with open(args.filtered_tokens_path, 'wb') as fp:
-            pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL) 
-        with open(args.filtered_frequencies_path, 'wb') as fp:
-            pickle.dump(token_freq, fp, protocol=pickle.HIGHEST_PROTOCOL)
-            
-        if args.verbose:
-            print('Filtering completed\n')
