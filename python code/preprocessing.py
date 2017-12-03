@@ -258,6 +258,11 @@ def filter_vocabulary(sentences, limit, delimiter=' ', verbose=False):
                                  for token in sentence.split(delimiter)
                                  if token in tokens])
                  for sentence in sentences]
+
+    # Remove blank sentences
+    sentences = [sentence for sentence in sentences if sentence]
+
+    # Count words in corpora
     word_count = sum(frequencies.values())
 
     if verbose:
