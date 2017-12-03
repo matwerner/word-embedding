@@ -11,198 +11,12 @@ Tutorial: http://mccormickml.com/2016/04/19/word2vec-tutorial-the-skip-gram-mode
 import argparse
 import numpy as np
 import pickle
-import random
+import util
 import theano
 import theano.tensor as T
 
 # Fix seed
 np.random.seed(100)
-
-"""
-    Corpus Class
-    Corpus dataset must be preprocessed by preprocessing.ipynb before being load
-"""
-
-class Corpus(object):
-    
-    def __init__(self, sentences_path, tokens_path, token_freq_path, sampling_rate, token_delimiter=' '):
-        # Sentence are store as string not as vectors
-        self.__token_delimiter = token_delimiter
-        
-        # Rate for decrease words
-        self.sampling_rate = sampling_rate
-        
-        # Load Corpus
-        with open(tokens_path, 'rb') as fp:
-            self.__tokens = pickle.load(fp)
-        with open(token_freq_path, 'rb') as fp:
-            self.__token_freq = pickle.load(fp)
-        with open(sentences_path, 'rb') as fp:
-            self.__sentences = pickle.load(fp)
-    
-    def sentences_size(self):
-        if hasattr(self, "__sentences_size") and self.__sentences_size:
-            return self.__sentences_size
-        
-        self.__sentences_size = len(self.__sentences)
-        return self.__sentences_size
-    
-    def tokens_size(self):
-        if hasattr(self, "__tokens_size") and self.__tokens_size:
-            return self.__tokens_size
-        
-        self.__tokens_size = len(self.__tokens)
-        return self.__tokens_size
-    
-    def words_size(self):
-        if hasattr(self, "__words_size") and self.__words_size:
-            return self.__words_size
-        
-        self.__word_size = sum(self.__token_freq.values())
-        return self.__word_size
-
-    def frequencies(self):
-        return {self.__tokens[token]:count
-                for token, count in self.__token_freq.items()}
-    
-    def tokens(self):
-        return self.__tokens.copy()
-    
-    def rejection_probability(self):
-        if hasattr(self, '__rejection_probability') and self.__rejection_probability:
-            return self.__reject_prob
-
-        n_words = self.words_size()
-        n_tokens = self.tokens_size()
-        rejection_probability = {}
-        for key, count in self.__token_freq.items():
-            density = count/(1.0 * n_words)            
-            
-            # Calculate rejection probability
-            rejection_probability[key] = 1 - (np.sqrt(density/self.sampling_rate) + 1) * (self.sampling_rate/density)
-
-        self.__rejection_probability = rejection_probability
-        return self.__rejection_probability
-
-    def sentences(self):
-        if hasattr(self, "__process_sentences") and self.__process_sentences:
-            return self.__sentences
-        self.__process_sentences = True
-        
-        rejection_probability = self.rejection_probability()
-        
-        j = 0
-        for i in range(self.sentences_size()):
-            tokens = []
-            for word in self.__get_sentence_tokens(self.__sentences[i]):
-                if not word:
-                    continue
-                try:
-                    prob = rejection_probability[word]
-                    if 0 > prob or random.random() > prob:
-                        tokens += [word]
-                except:
-                    raise ValueError("Line %d: %s" % (i, self.__sentences[i]))
-            
-            if len(tokens) < 2:
-                continue
-            
-            self.__sentences[j] = self.__set_sentence_tokens(tokens)
-            j+=1
-        
-        self.__sentences_size = j
-        self.__sentences = self.__sentences[:j]
-        return self.__sentences
-
-    def contexts(self, C=5):
-        for sentence in self.sentences():
-            indexes = self.__get_sentence_indexes(sentence)
-            for center_idx, center_word in enumerate(indexes):
-                # Get current context
-                context = self.__get_context(indexes, center_idx, center_word, C)
-
-                # Return current context
-                yield center_word, context
-                
-    def random_contexts(self, size, C=5):
-        sentences = self.sentences()
-        for _ in range(size):
-            # Get random sentence
-            sentence_idx = random.randint(0, len(sentences) - 1)
-            sentence = sentences[sentence_idx]
-            indexes = self.__get_sentence_indexes(sentence)
-
-            # Get random center word
-            center_idx = random.randint(0, len(indexes) - 1)
-            center_word = indexes[center_idx]
-
-            # Get current context
-            context = self.__get_context(indexes, center_idx, center_word, C)
-            
-            # Return current context
-            yield center_word, context
-    
-    def __get_context(self, sentence, center_idx, center_word, C=5):
-        # Get previous words
-        context = sentence[max(0, center_idx - C):center_idx]
-
-        # Get future words
-        if center_idx + 1 < len(sentence):
-            context += sentence[center_idx+1:min(len(sentence), center_idx + C + 1)]
-
-        # Remove duplicate center word
-        context = [word for word in context if word is not center_word]
-        
-        return context
-    
-    def __set_sentence_tokens(self, tokens):
-        return self.__token_delimiter.join(tokens)
-    
-    def __get_sentence_tokens(self, sentence):
-        return [word for word in sentence.split(self.__token_delimiter)]
-    
-    def __get_sentence_indexes(self, sentence):
-        return [self.__tokens[word] for word in sentence.split(self.__token_delimiter)]
-
-"""
-    Unigram table Class
-"""
-
-class UnigramTable(object):
-    
-    def __init__(self, counts):
-        power = 0.75
-        
-        # Calculate distribution
-        word_distribution = np.array([np.power(count, power) for count in counts.values()])
-        
-        # Normalize
-        word_distribution /= np.sum(word_distribution)
-        
-        
-        # table_size should be big enough so that the minimum probability for a word * table_size >= 1.
-        # Also,  table_size must be hardcoded as a counter-measure for the case of the minimum probability
-        # be a extremely low value, what would burst our memory
-        table_size = int(1e8)
-        table = np.zeros(table_size, dtype=np.int32)
-        
-        # Cumulative probability
-        cum_probability = 0
-        
-        i = 0
-        for word, count in counts.items():
-            cum_probability += word_distribution[word]
-            # fill the table until reach the cumulative probability
-            while i < table_size and i / table_size < cum_probability:
-                table[i] = word
-                i += 1
-
-        self.__table = table         
-        self.__table_size = table_size
-
-    def sample(self, k):        
-        indices = np.random.randint(low=0, high=self.__table_size, size=k)
-        return self.__table[indices]
 
 """
     Word2vec Class - Skip-gram implementation
@@ -350,45 +164,43 @@ class Word2Vec(object):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Word Embedding using Word2Vec')
-    parser.add_argument('--sampling', dest='sampling_rate', metavar='N',
+    parser.add_argument('--sampling', dest='sampling_rate',
                         type=float, default=1e-3,
                         help='Subsampling of frequenty words')
-    parser.add_argument('--learning_rate', dest='learning_rate', metavar='N',
+    parser.add_argument('--learning_rate', dest='learning_rate',
                         type=float, default=0.025,
                         help='Starting learning rate of the algorithm')                        
-    parser.add_argument('--embedding', dest='embedding_size', metavar='N',
+    parser.add_argument('--embedding', dest='embedding_size',
                         type=int, default=300,
                         help='Embedding dimensionality')
-    parser.add_argument('--random', dest='random_size', metavar='N',
+    parser.add_argument('--random', dest='random_size',
                         type=int, default=10**8,
                         help='Number of random contexts to train the word embedding')
-    parser.add_argument('--context', dest='context_size', metavar='N',
+    parser.add_argument('--context', dest='context_size',
                         type=int, default=5,
                         help='Window size')
-    parser.add_argument('--negative_sample', dest='negative_sample_size', metavar='N',
+    parser.add_argument('--negative_sample', dest='negative_sample_size',
                         type=int, default=10,
                         help='Number of counter-examples')
-    parser.add_argument('--batch', dest='batch_size', metavar='N',
+    parser.add_argument('--batch', dest='batch_size',
                         type=int, default=100,
                         help='Number of training samples before update weights')
-    parser.add_argument('--anneal_rate', dest='anneal_rate', metavar='N',
+    parser.add_argument('--anneal_rate', dest='anneal_rate',
                         type=float, default=0.9,
                         help='Rate for update Learning Rate')
-    parser.add_argument('--anneal', dest='anneal_every', metavar='N',
+    parser.add_argument('--anneal', dest='anneal_every',
                         type=int, default=100000,
                         help='Frequency of update Learning Rate')
-    parser.add_argument('--print', dest='print_every', metavar='N',
+    parser.add_argument('--print', dest='print_every',
                         type=int, default=5000,
                         help='Frequency of print temporary results')
-    parser.add_argument('--sentences_path', dest='sentences_path', metavar='N', type=str,
+    parser.add_argument('--sentences_path', dest='sentences_path', type=str,
                         help='Sentences dataset path')
-    parser.add_argument('--tokens_path', dest='tokens_path', metavar='N', type=str,
+    parser.add_argument('--tokens_path', dest='tokens_path', type=str,
                         help='Tokens dataset path')
-    parser.add_argument('--frequencies_path', dest='frequencies_path', metavar='N', type=str,
-                        help='Token frequencies dataset path')                                                
-    parser.add_argument('--w_in_path', dest='w_in_path', metavar='N', type=str,
+    parser.add_argument('--w_in_path', dest='w_in_path', type=str,
                         help='Word Embeddings IN path')
-    parser.add_argument('--w_out_path', dest='w_out_path', metavar='N', type=str,
+    parser.add_argument('--w_out_path', dest='w_out_path', type=str,
                         help='Word Embeddings OUT path')
     
     args = parser.parse_args()
@@ -397,13 +209,13 @@ if __name__ == '__main__':
         Load corpus
     """
 
-    corpus = Corpus(args.sentences_path, args.tokens_path, args.frequencies_path, args.sampling_rate)
+    corpus = util.Corpus(args.sentences_path, args.tokens_path, args.sampling_rate)
 
     """
         Process unigram table
     """
 
-    unigram_table = UnigramTable(corpus.frequencies())
+    unigram_table = util.UnigramTable(corpus.frequencies())
 
     """
         Run
