@@ -13,6 +13,7 @@ Source: https://www.mediawiki.org/wiki/Alternative_parsers
 """
     Load Packages
 """
+
 from collections import Counter
 
 import argparse
@@ -20,6 +21,7 @@ import json
 import math
 import os.path
 import pickle
+import random
 import re
 import string
 
@@ -29,14 +31,14 @@ VERBOSE_EVERY_PERC = 0.1
     Convert Corpus to sentences
 """
 
-numbers = '0123456789'
-punctuation = re.sub('[-,:=!?\.]', '', string.punctuation)
-translator = str.maketrans('', '', punctuation + numbers) 
+NUMBERS = '0123456789'
+PUNCTUATION = re.sub('[-,:=!?\.]', '', string.punctuation)
+TRANSLATOR = str.maketrans('', '', PUNCTUATION + NUMBERS)
 
 def get_sentences(corpus):
     # Remove punctuation and numbers
     preprocessed = re.sub('[-,–:=]', ' ', corpus)
-    preprocessed = preprocessed.translate(translator)
+    preprocessed = preprocessed.translate(TRANSLATOR)
     
     # Split text into sentences
     sentences = re.split('[!?\.\\n]', preprocessed)
@@ -267,7 +269,27 @@ def filter_vocabulary(sentences, limit, delimiter=' ', verbose=False):
     return sentences, tokens
 
 """
-    Convert all articles to sentences
+    Split sentences in training, validation and test
+"""
+
+def split_sentences(sentences, n_training, n_validation, verbose=False):
+    if verbose:
+        print("Start spliting sentences")
+
+    # Permutates sentences
+    random.shuffle(sentences)
+    
+    n_validation += n_training
+
+    # Split sentences
+    training = sentences[:n_training]
+    validation = sentences[n_training:n_validation]
+    test = sentences[n_validation:]
+
+    return training, validation, test
+
+"""
+    Preprocess command
 """
     
 def preprocess_command(verbose):
@@ -285,7 +307,7 @@ def preprocess_command(verbose):
     args, unknown = parser.parse_known_args()
     
     if verbose:
-        print('Start processing corpora')
+        print('Start preprocess command')
 
     # Load data
     corpora = []
@@ -306,9 +328,6 @@ def preprocess_command(verbose):
     stopwords = [] if not args.stopwords_path else [line.strip() for line in open(args.stopwords_path)]
     sentences, tokens = corpora_to_sentences(corpora, stopwords, verbose=verbose)
 
-    # Delete articles - memory restraint
-    del corpora
-
     # Save
     with open(args.sentences_path, 'wb') as fp:
         pickle.dump(sentences, fp, protocol=pickle.HIGHEST_PROTOCOL) 
@@ -316,10 +335,10 @@ def preprocess_command(verbose):
         pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
     if verbose:
-        print('Processing completed\n')
+        print('Preprocess command completed\n')
 
 """
-    Filter Tokens
+    Filter command
 """
 
 def filter_command(verbose):
@@ -335,7 +354,7 @@ def filter_command(verbose):
     args, unknown = parser.parse_known_args()
     
     if verbose:
-        print('Filtering vocabulary from sentences')
+        print('Starting Filter command')
     
     # Load
     with open(args.raw_sentences_path, 'rb') as fp:
@@ -351,8 +370,50 @@ def filter_command(verbose):
         pickle.dump(tokens, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
     if verbose:
-        print('Filtering completed\n')
+        print('Filter command completed\n')
 
+"""
+    Split command
+"""
+
+def split_command(verbose):
+    parser = argparse.ArgumentParser(description='Split sentences in training, validation and test')
+    parser.add_argument('--sentences', dest='sentences_path', type=str,
+                        help='path to store all sentences of processed articles')
+    parser.add_argument('--percentage', dest='percentage', type=str,
+                        help='limit number of tokens')
+    parser.add_argument('--training', dest='training_path', type=str,
+                        help='path to store all sentences of processed articles')
+    parser.add_argument('--validation', dest='validation_path', type=str,
+                        help='path to store all tokens of processed articles')
+    parser.add_argument('--test', dest='test_path', type=str,
+                        help='path to store all tokens of processed articles')                        
+    args, unknown = parser.parse_known_args()
+
+    if verbose:
+        print('Starting Split command')
+    
+    # Load
+    with open(args.sentences_path, 'rb') as fp:
+        sentences = pickle.load(fp)
+
+    # Parse percentages
+    n_training, n_validation = args.percentage.split("/")
+    n_training = int(len(sentences)/100 * int(n_training))
+    n_validation = int(len(sentences)/100 * int(n_validation))
+
+    training, validation, test = split_sentences(sentences, n_training, n_validation, verbose=verbose)
+
+    # Save
+    with open(args.training_path, 'wb') as fp:
+        pickle.dump(training, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(args.validation_path, 'wb') as fp:
+        pickle.dump(validation, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    with open(args.test_path, 'wb') as fp:
+        pickle.dump(test, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+    if verbose:
+        print('Split command completed')
 
 """
     Run experiments
@@ -371,6 +432,8 @@ if __name__ == '__main__':
         preprocess_command(args.verbose)
     elif args.command == "filter":
         filter_command(args.verbose)
+    elif args.command == "split":
+        split_command(args.verbose)
     else:
         raise ValueError("Command %s unknown" % args.command)
 
