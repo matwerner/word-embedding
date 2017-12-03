@@ -264,7 +264,7 @@ def filter_vocabulary(sentences, limit, delimiter=' ', verbose=False):
         print("Sentences:\t%d" % (len(sentences),))
         print("Tokens:\t\t%d" % (len(tokens),))
         print("Word Count:\t%d" % (word_count,))
-        print("Corpora to Sentences completed")
+        print("Filter vocabulary completed")
         
     return sentences, tokens
 
