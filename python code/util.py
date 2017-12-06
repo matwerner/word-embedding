@@ -3,7 +3,6 @@
 """
 
 from collections import Counter
-from sklearn.neighbors import NearestNeighbors
 
 import numpy as np
 import pickle
@@ -217,13 +216,18 @@ class FakeTest(object):
                window_size, negative_sample_size, test_size):
         self.instances = []
         for center_word, context in corpus.random_contexts(test_size, window_size):
-            for context_word in context:
-                # Get words not in context
-                negative_words = tuple(unigram_table.sample(negative_sample_size))
+            if len(context) < 2:
+                continue
 
-                # Append to fake test
-                instance = (center_word, context_word) + negative_words
-                self.instances.append(instance)
+            # Get words not in context
+            negative_words = tuple(unigram_table.sample(negative_sample_size))
+
+            # Get random context word
+            idx = np.random.randint(0, len(context))
+
+            # Append to fake test
+            instance = (center_word, context[idx]) + negative_words
+            self.instances.append(instance)
 
     def save(self, output_path):
         with open(output_path, 'wb') as fp:
@@ -236,18 +240,17 @@ class FakeTest(object):
     def evaluate(self, embeddings):
         correct = []
         incorrect = []
+        features = embeddings.shape[1]
         for test_words in self.instances:
-            center_word, context_word = test_words[0], test_words[1]
-            test_embeddings = [embeddings[word] for word in test_words]
+            center_embedding = embeddings[test_words[0]]
+            test_embeddings = [embeddings[word] for word in test_words[1:]]
 
-            nbrs = NearestNeighbors(n_neighbors=2, algorithm='ball_tree').fit(test_embeddings)
-            result = nbrs.kneighbors(embeddings[center_word], return_distance=False)
+            prob = 1./(1. + np.exp(-np.sum(center_embedding * test_embeddings, axis=1)))
+            result = np.argmax(prob)
 
-            if result[1] == context_word:
-                correct.append((center_word, context_word))
+            if result == 0:
+                correct.append((test_words[0], test_words[1]))
             else:
-                incorrect.append((center_word, context_word, result[1]))
+                incorrect.append((test_words[0], test_words[1], test_words[result + 1]))
 
-        n_correct, n_total = len(correct), len(self.instances)
-        print("%d of %d (%.2f) are correct" % (n_correct, n_total, 100 * n_correct/n_total))
         return correct, incorrect
